@@ -142,25 +142,7 @@ def pay_off_put(s, k, r, t, sigma, st):
     #payoff calculation
     payoff_series = pd.Series(data = np.linspace(s - 50, s + 50, 50))
     
-    #payoff plot
-    payoff_table = pd.DataFrame(np.zeros((3, 50)), columns = np.linspace(s - 50, s + 50, 50), index = ['asset payoff', 'covered call payoff', 'overall payoff'])
-    
-    for i in range(len(payoff_series)):
-        payoff_table.iloc[0, i] = payoff_series[i] - s
-        payoff_table.iloc[1, i] = - max(payoff_series[i] - k, 0) + c
-    
-    payoff_table.iloc[2, :] = payoff_table.iloc[0, :] + payoff_table.iloc[1, :]
-        
-    payoff_table.T.plot()
-    plt.title('covered call payoff')
-    plt.xlabel('asset price')
-    plt.ylabel('payoff value')
-    plt.axhline(0, linestyle="dashed", color = 'Grey')
-    
-    return your_payoff_table
-    
-    
-print(pay_off_put(100, 110, 0.03, 2, 0.01, 90))
+
         
         
         
