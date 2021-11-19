@@ -15,3 +15,6 @@ prices_df = pd.DataFrame({
 })
 
 print(prices_df.corr() >= 0.9)
+
+
+# Yes! I can edit it! --By TOP 1 hacker HSX
