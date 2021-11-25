@@ -31,12 +31,13 @@ def pairSelection(sectorName):
     data = yahoo_financials.get_historical_price_data(start_date='2014-01-01', 
                                                       end_date='2021-01-01', 
                                                       time_interval='daily')
+    
+    ## Compute the cointegration
     prices_df = pd.DataFrame({
         a: {x['formatted_date']: x['adjclose'] for x in data[a]['prices']} for a in assets
-        })
+        })                                  #FIXME
 
     print(prices_df.corr() >= 0.9)
-
 
 
 
