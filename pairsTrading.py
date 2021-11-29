@@ -8,6 +8,7 @@ import ssl
 import pandas as pd
 # import yfinance as yf
 from yahoofinancials import YahooFinancials
+from statsmodels.tsa.stattools import adfuller
 
 def pairSelection(sectorName):
     ## Get the company list in the S&P 500
@@ -32,12 +33,30 @@ def pairSelection(sectorName):
                                                       end_date='2021-01-01', 
                                                       time_interval='daily')
     
-    ## Compute the cointegration
+    ## filter the stock pairs by correlation matrix
     prices_df = pd.DataFrame({
         a: {x['formatted_date']: x['adjclose'] for x in data[a]['prices']} for a in assets
-        })                                  #FIXME
+        }) 
+    prices_df = prices_df.loc['2014-01-01':'2016-01-01']
+    print(prices_df)
+    
+    corr_df = prices_df.corr()
+    pairs = []    
+    for stock1 in assets:
+        for stock2 in assets:
+            if (corr_df.loc[stock1,stock2] >= 0.9 
+                and stock1 != stock2 
+                and (stock1, stock2) not in pairs 
+                and (stock2, stock1) not in pairs):
+                pairs.append((stock1, stock2))  
+    print("The pairs with correlation above the threshold 0.9:\n", pairs)
 
-    print(prices_df.corr() >= 0.9)
+    ## further the filtering by stationarity of the spread of pairs
+    pairs_st = []
+    for p in pairs:
+        if adfuller(prices_df[p[0]] - prices_df[p[1]])[1] < 0.05:
+            pairs_st.append(p)
+    print("The pairs with stationarity of the spread:\n", pairs_st)
 
 
 
