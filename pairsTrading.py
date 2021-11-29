@@ -10,7 +10,7 @@ import pandas as pd
 from yahoofinancials import YahooFinancials
 from statsmodels.tsa.stattools import adfuller
 
-def pairSelection(sectorName):
+def pairSelection(sectorName, corr_threshold, p_value_threshold):
     ## Get the company list in the S&P 500
     ssl._create_default_https_context = ssl._create_unverified_context
     
@@ -28,43 +28,43 @@ def pairSelection(sectorName):
     
     ## Get the historical data in the specific sector
     assets = grouped_lists.loc[sectorName][0]
+    
     yahoo_financials = YahooFinancials(assets)
     data = yahoo_financials.get_historical_price_data(start_date='2014-01-01', 
                                                       end_date='2021-01-01', 
                                                       time_interval='daily')
-    
-    ## filter the stock pairs by correlation matrix
     prices_df = pd.DataFrame({
         a: {x['formatted_date']: x['adjclose'] for x in data[a]['prices']} for a in assets
         }) 
     prices_df = prices_df.loc['2014-01-01':'2016-01-01']
-    print(prices_df)
     
+    
+    
+    ## Filter the stock pairs by correlation matrix
     corr_df = prices_df.corr()
     pairs = []    
     for stock1 in assets:
         for stock2 in assets:
-            if (corr_df.loc[stock1,stock2] >= 0.9 
+            if (corr_df.loc[stock1,stock2] >= corr_threshold
                 and stock1 != stock2 
                 and (stock1, stock2) not in pairs 
                 and (stock2, stock1) not in pairs):
                 pairs.append((stock1, stock2))  
     print("The pairs with correlation above the threshold 0.9:\n", pairs)
 
-    ## further the filtering by stationarity of the spread of pairs
+    ## Further the filtering by stationarity of the spread of pairs
     pairs_st = []
     for p in pairs:
-        if adfuller(prices_df[p[0]] - prices_df[p[1]])[1] < 0.05:
+        if adfuller(prices_df[p[0]] - prices_df[p[1]])[1] < p_value_threshold:
             pairs_st.append(p)
     print("The pairs with stationarity of the spread:\n", pairs_st)
 
 
 
 
-
 ################################################################################
 if __name__ == '__main__':
-    pairSelection('Communication Services')
+    pairSelection('Health Care', 0.9, 0.05)
     
     
     
