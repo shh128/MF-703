@@ -10,7 +10,8 @@ import pandas as pd
 from yahoofinancials import YahooFinancials
 from statsmodels.tsa.stattools import adfuller
 
-def pairSelection(sectorName, corr_threshold, p_value_threshold):
+def pairSelection(sectorName, corr_threshold, p_value_threshold, 
+                  coint_start_date, coint_end_date):
     ## Get the company list in the S&P 500
     ssl._create_default_https_context = ssl._create_unverified_context
     
@@ -33,12 +34,15 @@ def pairSelection(sectorName, corr_threshold, p_value_threshold):
     data = yahoo_financials.get_historical_price_data(start_date='2014-01-01', 
                                                       end_date='2021-01-01', 
                                                       time_interval='daily')
+    
+    
     prices_df = pd.DataFrame({
         a: {x['formatted_date']: x['adjclose'] for x in data[a]['prices']} for a in assets
         }) 
-    prices_df = prices_df.loc['2014-01-01':'2016-01-01']
     
-    
+    prices_df = prices_df.loc[coint_start_date:coint_end_date]
+    print(prices_df)
+    print(prices_df.isnull().sum())
     
     ## Filter the stock pairs by correlation matrix
     corr_df = prices_df.corr()
@@ -64,10 +68,5 @@ def pairSelection(sectorName, corr_threshold, p_value_threshold):
 
 ################################################################################
 if __name__ == '__main__':
-    pairSelection('Health Care', 0.9, 0.05)
-    
-    
-    
-    
-    
+    pairSelection('Information Technology', 0.9, 0.05, '2014-01-01', '2016-01-01')
     
