@@ -93,20 +93,20 @@ class pair_selection:
 # In[266]:
 
 
-if __name__ == '__main__':
-    pairs = pair_selection('Information Technology', 0.9, 0.05, '2014-01-01', '2016-01-01')
+#if __name__ == '__main__':
+#    pairs = pair_selection('Information Technology', 0.9, 0.05, '2014-01-01', '2016-01-01')
 
 
 # In[267]:
 
 
-pairs.company_list()
+#pairs.company_list()
 
 
 # In[268]:
 
 
-pairs.corr_coint_filter()
+#pairs.corr_coint_filter()
 
 
 # In[281]:
