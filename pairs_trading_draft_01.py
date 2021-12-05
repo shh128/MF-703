@@ -76,7 +76,16 @@ class pair_selection:
         ## Further the filtering by stationarity of the spread of pairs
         pairs_st = []
         for p in pairs:
-            if adfuller(prices_df[p[0]] - prices_df[p[1]])[1] < self.p_value_threshold:
+            x = prices_df[p[0]]
+            y = prices_df[p[1]]
+            regr = linear_model.LinearRegression()
+            x_constant = pd.concat([x, pd.Series([1]*len(x),index = x.index)], axis=1)
+            regr.fit(x_constant, y)
+            beta = regr.coef_[0]
+            alpha = regr.intercept_
+            spd = y - beta * x - alpha           
+            
+            if adfuller(spd)[1] < self.p_value_threshold:
                 pairs_st.append(p)
         return pairs_st                    
     
