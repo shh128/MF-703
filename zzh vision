@@ -200,11 +200,12 @@ class trading_signal(pair_selection):
         for i in range(1, adj_sig.shape[0]):
             for j in range(0, adj_sig.shape[1]):
                 if adj_sig.iloc[i-1,j]!=0:
-                    unit_table.iloc[i,j]=unit_table.iloc[i-1,j]
-                    profit_table.iloc[i,j]=profit_table.iloc[i-1,j]+diff_table.iloc[i,2*j]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j]-diff_table.iloc[i,2*j+1]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j+1]
+                    unit_table.iloc[i,2*j]=unit_table.iloc[i-1,2*j]
+                    unit_table.iloc[i, 2*j+1]=unit_table.iloc[i-1,2*j+1]
+                    profit_table.iloc[i,j]=profit_table.iloc[i-1,j]-diff_table.iloc[i,2*j]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j]+diff_table.iloc[i,2*j+1]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j+1]
                 elif adj_sig.iloc[i-1,j]==0 and adj_sig.iloc[i,j]!=0:
                     unit_table.iloc[i,j]=(profit_table.iloc[i-1,j]+1000000)/price.iloc[i,j]
-                    profit_table.iloc[i,j]=profit_table.iloc[i-1,j]+diff_table.iloc[i,2*j]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j]-diff_table.iloc[i,2*j+1]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j+1]
+                    profit_table.iloc[i,j]=profit_table.iloc[i-1,j]-diff_table.iloc[i,2*j]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j]+diff_table.iloc[i,2*j+1]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j+1]
         ret_table=profit_table.pct_change()
         return ret_table
                     
