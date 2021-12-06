@@ -87,7 +87,31 @@ class pair_selection:
             
             if adfuller(spd)[1] < self.p_value_threshold:
                 pairs_st.append(p)
-        return pairs_st                    
+                
+        ## Out of all the pairs that contains the same stock, keep the one with
+        ## the highest correlation
+        
+        # Create and sort a list of dictionaries with symbols and correlation 
+        # of the pair
+        list_corr = [] 
+        for p in pairs_st:
+            list_corr.append({'pair':p, 'corr':corr_df.loc[p[0], p[1]]})
+        
+        list_corr_sorted = sorted(list_corr, key=lambda d: d['corr'], reverse=True) 
+        
+        print(list_corr_sorted)
+        
+        # Leave out the pairs with the same stock
+        pairs_final = []
+        for d in list_corr_sorted:
+            same_stock = False
+            for p in pairs_final:
+                if d['pair'][0] in p or d['pair'][1] in p:
+                    same_stock = True
+            if not same_stock:
+                pairs_final.append(d['pair'])
+                
+        return pairs_final                    
     
     
 class trading_signal(pair_selection):
