@@ -200,11 +200,11 @@ class trading_signal(pair_selection):
                 if adj_sig.iloc[i-1,j]!=0:
                     unit_table.iloc[i,2*j]=unit_table.iloc[i-1,2*j]
                     unit_table.iloc[i, 2*j+1]=unit_table.iloc[i-1,2*j+1]
-                    profit_table.iloc[i,j]=profit_table.iloc[i-1,j]-diff_table.iloc[i,2*j]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j]+diff_table.iloc[i,2*j+1]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j+1]
+                    profit_table.iloc[i,j]=-diff_table.iloc[i,2*j]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j]+diff_table.iloc[i,2*j+1]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j+1]
                 elif adj_sig.iloc[i-1,j]==0 and adj_sig.iloc[i,j]!=0:
-                    unit_table.iloc[i,j]=(profit_table.iloc[i-1,j]+1000000)/price.iloc[i,j]
-                    profit_table.iloc[i,j]=profit_table.iloc[i-1,j]-diff_table.iloc[i,2*j]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j]+diff_table.iloc[i,2*j+1]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j+1]
-        profit_table = profit_table + 1000000
+                    unit_table.iloc[i,j]=(profit_table.iloc[:,j].sum()+1000000)/price.iloc[i,j]
+                    profit_table.iloc[i,j]=-diff_table.iloc[i,2*j]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j]+diff_table.iloc[i,2*j+1]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j+1]
+        profit_table = profit_table.cumsum() + 1000000
         profit_table['Total Profit'] = profit_table.sum(axis = 1)
         ret_table = profit_table.pct_change()
         return ret_table
@@ -218,6 +218,7 @@ trade = trading_signal(1.5, 0.5, 'Energy', 0.9, 0.05, '2014-01-01', '2016-01-01'
 price = trade.stock_price_return()
 adj_sig = trade.adj_signal()
 ret_table = trade.portfolio_profit(adj_sig, price)
+print(ret_table)
 
 def sharpe(pairs_ret, Rf):
     mean_ret = pairs_ret.mean()*252
@@ -226,34 +227,33 @@ def sharpe(pairs_ret, Rf):
     return sharpe_ratio
         
 def parameter_tune(open_sig, close_sig, Rf):
-    performance_table = pd.DataFrame(data = np.zeros((45, 3)), 
-                                     columns = ['Open Signal', 'Close Signal', 'Sharpe Ratio'])
+    performance = []
     k = 0
     for i in range(len(open_sig)-1):
         for j in range(i+1, len(close_sig)):
-            trade = trading_signal(open_sig[i], close_sig[j], 'Information Technology', 0.9, 0.05, '2014-01-01', '2016-01-01', '2016-01-01', '2021-01-01', 90)
+            trade = trading_signal(open_sig[i], close_sig[j], 'Energy', 0.9, 0.05, '2014-01-01', '2016-01-01', '2016-01-01', '2021-01-01', 90)
             price = trade.stock_price_return()
             adj_sig = trade.adj_signal()
             ret_table = trade.portfolio_profit(adj_sig, price)
-            performance_table.iloc[k, 0] = open_sig[i]
-            performance_table.iloc[k, 1] = close_sig[j]
-            performance_table.iloc[k, 2] = sharpe(ret_table, Rf)
-            k += 1
+            performance.append([open_sig[i], close_sig[j], sharpe(ret_table, Rf)[-1]])
             print(k, 'is calculated')
-    return performance_table
+    return performance
 
-def model_stability(performance_table):
+def model_stability(performance):
     fig = plt.figure()
     ax = plt.axes(projection='3d')
-    ax.contour3D(performance_table['Open Signal'], performance_table['Close Signal'], performance_table['Sharpe Ratio'], 50, cmap='binary')
+    x = [item[0] for item in performance]
+    y = [item[1] for item in performance]
+    z = [item[2] for item in performance]
+    ax.scatter(x, y, z)
+    ax.set_title('Sharpe Ratio Surface');
     ax.set_xlabel('Open Signal')
     ax.set_ylabel('Close Signal')
     ax.set_zlabel('Sharpe Ratio');
-    ax.view_init(60, 35)
     return fig
 
 
-open_sig = np.linspace(3, 0.5, 10)
-close_sig = np.linspace(3, 0.5, 10)
+open_sig = np.linspace(3, 0.5, 6)
+close_sig = np.linspace(3, 0.5, 6)
 
 pt = parameter_tune(open_sig, close_sig, 0.01)
