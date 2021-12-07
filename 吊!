@@ -1,0 +1,259 @@
+import ssl
+import pandas as pd
+import matplotlib.pyplot as plt
+import random
+import numpy as np
+from sklearn import linear_model
+import math
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# import yfinance as yf
+from yahoofinancials import YahooFinancials
+from statsmodels.tsa.stattools import adfuller
+
+class pair_selection:
+    
+    def __init__(self, sectorName, corr_threshold, p_value_threshold,
+                  coint_start_date, coint_end_date):
+        self.sectorName = sectorName
+        self.corr_threshold = corr_threshold
+        self.p_value_threshold = p_value_threshold 
+        self.coint_start_date = coint_start_date
+        self.coint_end_date = coint_end_date
+        
+    def company_list(self):
+        ## Get the company list in the S&P 500
+        ssl._create_default_https_context = ssl._create_unverified_context
+
+        payload = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')            
+        first_table = payload[0]
+        df = first_table
+        #print(df.columns)
+
+        ## Group the companies by the column "GICS Sector"
+        grouped_df = df.groupby("GICS Sector")
+        grouped_lists = grouped_df["Symbol"].apply(list)
+        grouped_lists = grouped_lists.reset_index()
+        grouped_lists = grouped_lists.set_index('GICS Sector')
+        return grouped_lists
+    
+    def ticker(self):
+        company = self.company_list()    
+        assets = company.loc[self.sectorName][0] #get specific ticker in the selected sector
+        return assets
+       
+    
+    def stock_price(self):
+        tickers = self.ticker()
+        yahoo_financials = YahooFinancials(tickers)
+        data = yahoo_financials.get_historical_price_data(start_date='2014-01-01',
+                                                          end_date='2021-01-01',
+                                                          time_interval='daily')
+    
+        prices_df = pd.DataFrame({
+            a: {x['formatted_date']: x['adjclose']
+                  for x in data[a]['prices']}
+            for a in tickers
+        })
+        return prices_df
+    def stock_price_return(self):
+        tickers = self.ticker()
+        yahoo_financials = YahooFinancials(tickers)
+        data = yahoo_financials.get_historical_price_data(start_date='2016-01-01',
+                                                          end_date='2021-01-01',
+                                                          time_interval='daily')
+    
+        prices_df1 = pd.DataFrame({
+            a: {x['formatted_date']: x['adjclose']
+                  for x in data[a]['prices']}
+            for a in tickers
+        })
+        prices_df1=prices_df1[['COP', 'EOG', 'DVN', 'EOG', 'EOG', 'SLB', 'MRO', 'OKE']]
+        return prices_df1
+    
+    def corr_coint_filter(self):
+        ## Filter the stock pairs by correlation matrix        
+        
+        prices_df = self.stock_price().loc[self.coint_start_date:self.coint_end_date] 
+        prices_df = prices_df.fillna(0)
+        
+        tickers = self.ticker()
+        corr_df = prices_df.corr()
+
+        pairs = []
+        for stock1 in tickers:
+            for stock2 in tickers:
+                if (corr_df.loc[stock1, stock2] >= self.corr_threshold
+                        and stock1 != stock2 and (stock1, stock2) not in pairs
+                        and (stock2, stock1) not in pairs):
+                    pairs.append((stock1, stock2))
+ 
+        ## Further the filtering by stationarity of the spread of pairs
+        pairs_st = []
+        for p in pairs:
+            if adfuller(prices_df[p[0]] - prices_df[p[1]])[1] < self.p_value_threshold:
+                pairs_st.append(p)
+        return pairs_st                    
+    
+    
+class trading_signal(pair_selection):
+    def __init__(self, open_threshold, close_threshold, sectorName, corr_threshold, p_value_threshold, coint_start_date, coint_end_date, trade_start, trade_end, num_days):
+        super().__init__(sectorName, corr_threshold, p_value_threshold, coint_start_date, coint_end_date)
+        self.open_threshold = open_threshold
+        self.close_threshold =close_threshold
+        self.trade_start = trade_start
+        self.trade_end = trade_end
+        self.num_days = num_days
+    
+    def ratio(self):
+        pair = self.corr_coint_filter()
+        price = self.stock_price().loc[self.trade_start:self.trade_end]
+        
+        price = price.fillna(0)
+        ratio_table = pd.DataFrame(index = price.index, columns= pair)
+        for i in range(len(pair)):
+            x = price[pair[i][0]]
+            y = price[pair[i][1]] 
+                
+            ratio_table[pair[i]] = x / y 
+        return ratio_table          
+    
+    
+    def signal(self): #calculate ratio 
+        
+        pair = self.corr_coint_filter()
+        price = self.stock_price().loc[self.trade_start:self.trade_end]
+        
+        price = price.fillna(0)
+        
+        signal_table = pd.DataFrame(index = price.index, columns = pair, data = None)
+        for i in range(len(pair)):
+            x = price[pair[i][0]]
+            y = price[pair[i][1]] 
+                
+            ratio = x / y
+            ratios_mavg90 = ratio.rolling(window=self.num_days,center=False).mean()
+            std_90 = ratio.rolling(window=self.num_days,center=False).std()
+        
+            z_score = (ratio-ratios_mavg90)/std_90
+            z_score_mean = np.mean(z_score)
+            
+            for j in range(len(z_score)):
+                if z_score[j] > self.open_threshold: 
+                    #sell x(left), buy y(right)
+                    signal_table[pair[i]][j] = 1
+           
+                elif z_score[j] < -self.open_threshold:
+                    #buy x(left), sell y(right)
+                    signal_table[pair[i]][j] = -1
+                
+                elif abs(z_score[j]) < self.close_threshold:
+                    signal_table[pair[i]][j] = 0
+                    
+#         pd.set_option('display.max_rows', None)
+#        signal_table_adj = signal_table.dropna(how = 'all')
+        return signal_table
+    
+    def adj_signal(self):
+        table = self.signal()
+        for i in range(1, table.shape[0]):
+            for j in range(0, table.shape[1]):
+                if table.iloc[i-1, j] == 1 and math.isnan(table.iloc[i, j]) == True:
+                    table.iloc[i, j] = 1
+                elif table.iloc[i-1, j] == 0 and math.isnan(table.iloc[i, j]) == True:
+                    table.iloc[i, j] = 0
+                elif table.iloc[i-1, j] == -1 and math.isnan(table.iloc[i, j]) == True:
+                    table.iloc[i, j] = -1
+        for i in range(0, table.shape[0]):
+            for j in range(0, table.shape[1]):
+                if math.isnan(table.iloc[i, j]) == True:
+                    table.iloc[i, j]=0
+                    
+        pd.set_option('display.max_rows', None)
+        return table
+    def stock_price_return(self):
+        tickers = self.ticker()
+        yahoo_financials = YahooFinancials(tickers)
+        data = yahoo_financials.get_historical_price_data(start_date='2016-01-01',
+                                                          end_date='2021-01-01',
+                                                          time_interval='daily')
+    
+        prices_df1 = pd.DataFrame({
+            a: {x['formatted_date']: x['adjclose']
+                  for x in data[a]['prices']}
+            for a in tickers
+        })
+        prices_df1=prices_df1[['COP', 'EOG', 'DVN', 'EOG', 'EOG', 'SLB', 'MRO', 'OKE']]
+        return prices_df1
+    
+    def portfolio_profit(self, adj_sig, price):
+        profit_table = pd.DataFrame(data = np.zeros((adj_sig.shape[0], adj_sig.shape[1])), columns = adj_sig.columns, index = adj_sig.index)
+        profit_table.iloc[0,:]=0
+        diff_table = price.diff()
+        unit_table = price
+        unit_table.iloc[0,:]=1000000/price.iloc[0,:]
+        
+        for i in range(1, adj_sig.shape[0]):
+            for j in range(0, adj_sig.shape[1]):
+                if adj_sig.iloc[i-1,j]!=0:
+                    unit_table.iloc[i,2*j]=unit_table.iloc[i-1,2*j]
+                    unit_table.iloc[i, 2*j+1]=unit_table.iloc[i-1,2*j+1]
+                    profit_table.iloc[i,j]=profit_table.iloc[i-1,j]-diff_table.iloc[i,2*j]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j]+diff_table.iloc[i,2*j+1]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j+1]
+                elif adj_sig.iloc[i-1,j]==0 and adj_sig.iloc[i,j]!=0:
+                    unit_table.iloc[i,j]=(profit_table.iloc[i-1,j]+1000000)/price.iloc[i,j]
+                    profit_table.iloc[i,j]=profit_table.iloc[i-1,j]-diff_table.iloc[i,2*j]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j]+diff_table.iloc[i,2*j+1]*adj_sig.iloc[i-1,j]*unit_table.iloc[i,2*j+1]
+        profit_table = profit_table + 1000000
+        profit_table['Total Profit'] = profit_table.sum(axis = 1)
+        ret_table = profit_table.pct_change()
+        return ret_table
+                    
+                    
+        
+  
+
+pairs = pair_selection('Energy', 0.9, 0.05, '2014-01-01', '2016-01-01')
+trade = trading_signal(1.5, 0.5, 'Energy', 0.9, 0.05, '2014-01-01', '2016-01-01', '2016-01-01', '2021-01-01', 90)
+price = trade.stock_price_return()
+adj_sig = trade.adj_signal()
+ret_table = trade.portfolio_profit(adj_sig, price)
+
+def sharpe(pairs_ret, Rf):
+    mean_ret = pairs_ret.mean()*252
+    vol = pairs_ret.std()*math.sqrt(252)
+    sharpe_ratio = (mean_ret - Rf)/vol
+    return sharpe_ratio
+        
+def parameter_tune(open_sig, close_sig, Rf):
+    performance_table = pd.DataFrame(data = np.zeros((45, 3)), 
+                                     columns = ['Open Signal', 'Close Signal', 'Sharpe Ratio'])
+    k = 0
+    for i in range(len(open_sig)-1):
+        for j in range(i+1, len(close_sig)):
+            trade = trading_signal(open_sig[i], close_sig[j], 'Information Technology', 0.9, 0.05, '2014-01-01', '2016-01-01', '2016-01-01', '2021-01-01', 90)
+            price = trade.stock_price_return()
+            adj_sig = trade.adj_signal()
+            ret_table = trade.portfolio_profit(adj_sig, price)
+            performance_table.iloc[k, 0] = open_sig[i]
+            performance_table.iloc[k, 1] = close_sig[j]
+            performance_table.iloc[k, 2] = sharpe(ret_table, Rf)
+            k += 1
+            print(k, 'is calculated')
+    return performance_table
+
+def model_stability(performance_table):
+    fig = plt.figure()
+    ax = plt.axes(projection='3d')
+    ax.contour3D(performance_table['Open Signal'], performance_table['Close Signal'], performance_table['Sharpe Ratio'], 50, cmap='binary')
+    ax.set_xlabel('Open Signal')
+    ax.set_ylabel('Close Signal')
+    ax.set_zlabel('Sharpe Ratio');
+    ax.view_init(60, 35)
+    return fig
+
+
+open_sig = np.linspace(3, 0.5, 10)
+close_sig = np.linspace(3, 0.5, 10)
+
+pt = parameter_tune(open_sig, close_sig, 0.01)
